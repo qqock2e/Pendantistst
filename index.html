@@ -374,6 +374,8 @@
             13: { name: '별의 조각', emoji: '⭐', chorus: 15, multiple: 2.0, description: '하늘에서 떨어진 별의 조각입니다.' },
             14: { name: '달의 눈물', emoji: '🌙', chorus: 20, multiple: 2.5, description: '달빛이 응축된 신비한 보석입니다.' },
             15: { name: '태양의 심장', emoji: '☀️', chorus: 25, multiple: 3.0, description: '태양의 힘이 담긴 전설의 보석입니다.' }
+            16: { name: '카르마 벨', emoji: '🔮', chorus: 30, multiple: 2.5, description: '붕괴된 차원에서 나온 파편입니다. 아마 고양이의 파편이었던거 같네요..' }
+            17: { name: '코러스석', emoji: '🔮', chorus: 2, multiple: 1, description: '어쩐지 손에 딱 맞는 작은 돌입니다' }
         };
 
         // 화면 업데이트 함수
@@ -599,11 +601,11 @@
 
         // 등급별 보석 보상 설정 (유지보수 쉽게 하기 위해 별도 객체로 관리)
         const gemRewards = {
-            '일반': [1, 2, 3],
+            '일반': [1, 2, 3, 17],
             '희귀': [4, 5, 6], 
             '에픽': [7, 8, 9],
             '전설': [10, 11, 12],
-            '유니크': [13, 14, 15]
+            '유니크': [13, 14, 15, 16]
         };
 
         // 등급 결정 및 공개
@@ -927,3 +929,4 @@
     </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97750a7200f3c441',t:'MTc1NjU2NDgwMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+
