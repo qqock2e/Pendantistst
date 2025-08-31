@@ -134,6 +134,7 @@
             <div id="loginLoading" class="hidden mt-4 flex justify-center">
                 <div class="loading-spinner"></div>
             </div>
+            <div id="loginError" class="hidden mt-4 text-red-300 text-sm"></div>
         </div>
     </div>
     
@@ -480,15 +481,22 @@
                         <p>사용자 ID: <span id="userIdDisplay">로딩 중...</span></p>
                     </div>
                 </div>
+                
+                <!-- 디버그 정보 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <h3 class="text-lg font-bold text-white mb-2">🔧 디버그 정보</h3>
+                    <div id="debugInfo" class="text-gray-300 text-xs">
+                        <p>API URL: <span id="apiUrlDisplay">로딩 중...</span></p>
+                        <p>마지막 API 호출: <span id="lastApiCall">없음</span></p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // API 설정 - 실제 Render URL로 업데이트
-        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:10000'
-            : 'https://pendantistst-backend.onrender.com';
+        // API 설정 - 실제 Render URL로 고정
+        const API_BASE_URL = 'https://pendantistst-backend.onrender.com';
 
         // 게임 상태 변수
         let currentUserId = null;
@@ -528,28 +536,55 @@
 
         // API 호출 함수들
         async function apiCall(endpoint, method = 'GET', data = null) {
+            const fullUrl = `${API_BASE_URL}${endpoint}`;
+            
             try {
+                console.log(`🔄 API 호출: ${method} ${fullUrl}`);
+                document.getElementById('lastApiCall').textContent = `${method} ${endpoint}`;
+                
                 const options = {
                     method,
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    mode: 'cors'
                 };
                 
                 if (data) {
                     options.body = JSON.stringify(data);
+                    console.log('📤 요청 데이터:', data);
                 }
                 
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                const response = await fetch(fullUrl, options);
+                console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    let errorMessage = `HTTP ${response.status}`;
+                    try {
+                        const errorText = await response.text();
+                        console.error('❌ API 오류 응답:', errorText);
+                        errorMessage += `: ${errorText}`;
+                    } catch (e) {
+                        console.error('❌ 오류 응답 파싱 실패:', e);
+                    }
+                    throw new Error(errorMessage);
                 }
                 
-                return await response.json();
+                const result = await response.json();
+                console.log('✅ API 응답:', result);
+                return result;
             } catch (error) {
-                console.error('API 호출 오류:', error);
-                showMessage('서버 연결에 실패했습니다.', 'text-red-300');
+                console.error('💥 API 호출 실패:', error);
+                
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    showMessage('🌐 서버에 연결할 수 없습니다. 네트워크를 확인하세요.', 'text-red-300');
+                } else if (error.message.includes('404')) {
+                    showMessage('🔍 API 엔드포인트를 찾을 수 없습니다.', 'text-red-300');
+                } else if (error.message.includes('500')) {
+                    showMessage('🔧 서버 내부 오류가 발생했습니다.', 'text-red-300');
+                } else {
+                    showMessage(`❌ 서버 오류: ${error.message}`, 'text-red-300');
+                }
                 throw error;
             }
         }
@@ -558,13 +593,16 @@
         async function login() {
             const loginBtn = document.getElementById('loginBtn');
             const loginLoading = document.getElementById('loginLoading');
+            const loginError = document.getElementById('loginError');
             
             loginBtn.style.display = 'none';
             loginLoading.classList.remove('hidden');
+            loginError.classList.add('hidden');
             
             try {
                 // 기존 사용자 ID 확인
                 const savedUserId = localStorage.getItem('gemGachaUserId');
+                console.log('💾 저장된 사용자 ID:', savedUserId);
                 
                 const response = await apiCall('/api/auth/login', 'POST', {
                     userId: savedUserId
@@ -573,6 +611,7 @@
                 if (response.success) {
                     currentUserId = response.userId;
                     localStorage.setItem('gemGachaUserId', currentUserId);
+                    console.log('✅ 로그인 성공:', currentUserId);
                     
                     // 게임 데이터 로드
                     await loadGameData();
@@ -581,18 +620,24 @@
                     document.getElementById('loginScreen').style.display = 'none';
                     document.getElementById('mainUI').style.opacity = '1';
                     
-                    showMessage('게임에 접속했습니다!', 'text-green-300');
+                    showMessage('🎮 게임에 접속했습니다!', 'text-green-300');
+                } else {
+                    throw new Error('로그인 응답이 실패했습니다.');
                 }
             } catch (error) {
+                console.error('💥 로그인 실패:', error);
                 loginBtn.style.display = 'block';
                 loginLoading.classList.add('hidden');
-                showMessage('로그인에 실패했습니다.', 'text-red-300');
+                loginError.classList.remove('hidden');
+                loginError.textContent = `로그인 실패: ${error.message}`;
+                showMessage('❌ 로그인에 실패했습니다.', 'text-red-300');
             }
         }
 
         // 게임 데이터 로드
         async function loadGameData() {
             try {
+                console.log('📊 게임 데이터 로드 시작:', currentUserId);
                 const data = await apiCall(`/api/user/gamedata/${currentUserId}`);
                 gameData = data;
                 updateDisplay();
@@ -601,8 +646,10 @@
                 
                 // 사용자 정보 업데이트
                 document.getElementById('userIdDisplay').textContent = currentUserId.substring(0, 8) + '...';
+                console.log('✅ 게임 데이터 로드 완료');
             } catch (error) {
-                console.error('게임 데이터 로드 실패:', error);
+                console.error('💥 게임 데이터 로드 실패:', error);
+                showMessage('📊 게임 데이터를 불러올 수 없습니다.', 'text-red-300');
             }
         }
 
@@ -637,12 +684,12 @@
                 updateDisplay();
                 
                 if (response.prismsEarned > 0) {
-                    showMessage(`${response.earnedPoints} 포인트 + 휘광으로 프리즘 1개 획득!`, 'text-purple-300');
+                    showMessage(`💰 ${response.earnedPoints} 포인트 + 휘광으로 프리즘 1개 획득!`, 'text-purple-300');
                 } else {
-                    showMessage(`${response.earnedPoints} 포인트를 획득했습니다!`, 'text-blue-300');
+                    showMessage(`💰 ${response.earnedPoints} 포인트를 획득했습니다!`, 'text-blue-300');
                 }
             } catch (error) {
-                console.error('포인트 획득 실패:', error);
+                console.error('💥 포인트 획득 실패:', error);
             }
         }
 
@@ -674,10 +721,10 @@
                     // 뽑기 애니메이션 시작
                     startGachaAnimation();
                 } else {
-                    showMessage('뽑기에 실패했습니다.', 'text-red-300');
+                    showMessage('🎲 뽑기에 실패했습니다.', 'text-red-300');
                 }
             } catch (error) {
-                console.error('뽑기 실패:', error);
+                console.error('💥 뽑기 실패:', error);
             }
         }
 
@@ -697,11 +744,11 @@
                     gameData.prisms = response.prisms;
                     updateDisplay();
                     updateVolumeShopDisplay();
-                    showMessage(`${getVolumeKoreanName(type)}을(를) 구매했습니다!`, 'text-green-300');
+                    showMessage(`🛒 ${getVolumeKoreanName(type)}을(를) 구매했습니다!`, 'text-green-300');
                 }
             } catch (error) {
-                const errorData = await error.response?.json();
-                showMessage(errorData?.error || '구매에 실패했습니다.', 'text-red-300');
+                console.error('💥 볼륨 구매 실패:', error);
+                showMessage('🛒 구매에 실패했습니다.', 'text-red-300');
             }
         }
 
@@ -724,13 +771,13 @@
                     
                     const gem = gemData[gemId];
                     if (action === 'equip') {
-                        showMessage(`${gem.name}을(를) 장착했습니다!`, 'text-green-300');
+                        showMessage(`💎 ${gem.name}을(를) 장착했습니다!`, 'text-green-300');
                     } else {
-                        showMessage(`${gem.name} 장착을 해제했습니다!`, 'text-yellow-300');
+                        showMessage(`💎 ${gem.name} 장착을 해제했습니다!`, 'text-yellow-300');
                     }
                 }
             } catch (error) {
-                console.error('보석 장착/해제 실패:', error);
+                console.error('💥 보석 장착/해제 실패:', error);
             }
         }
 
@@ -752,10 +799,10 @@
                     showGemDetails(gemId);
                     
                     const gem = gemData[gemId];
-                    showMessage(`${gem.name}을(를) 추출하여 프리즘 ${response.prismReward}개를 획득했습니다!`, 'text-purple-300');
+                    showMessage(`💎 ${gem.name}을(를) 추출하여 프리즘 ${response.prismReward}개를 획득했습니다!`, 'text-purple-300');
                 }
             } catch (error) {
-                console.error('보석 추출 실패:', error);
+                console.error('💥 보석 추출 실패:', error);
             }
         }
 
@@ -791,7 +838,7 @@
             document.getElementById('volumeShopScreen').style.pointerEvents = 'none';
         }
 
-        // 뽑기 애니메이션 및 UI 함수들 (기존 코드와 동일하지만 API 연동)
+        // 뽑기 애니메이션 및 UI 함수들
         function startGachaAnimation() {
             isGachaActive = true;
             
@@ -876,8 +923,37 @@
             }, 500);
         }
 
-        // 나머지 UI 함수들 (상점, 인벤토리 등)은 기존 코드와 유사하게 구현
-        // 하지만 데이터는 gameData 객체에서 가져오고 API 호출로 업데이트
+        // 상점 관련 함수들
+        function openGachaShop() {
+            document.getElementById('shopScreen').style.opacity = '0';
+            document.getElementById('shopScreen').style.pointerEvents = 'none';
+            document.getElementById('gachaShopScreen').style.opacity = '1';
+            document.getElementById('gachaShopScreen').style.pointerEvents = 'auto';
+        }
+
+        function openVolumeShop() {
+            document.getElementById('shopScreen').style.opacity = '0';
+            document.getElementById('shopScreen').style.pointerEvents = 'none';
+            document.getElementById('volumeShopScreen').style.opacity = '1';
+            document.getElementById('volumeShopScreen').style.pointerEvents = 'auto';
+        }
+
+        // 빈 함수들 (나중에 구현)
+        function updateEquippedGemDisplay() {
+            // TODO: 장착된 보석 표시 업데이트
+        }
+
+        function updateInventoryDisplay() {
+            // TODO: 인벤토리 표시 업데이트
+        }
+
+        function updateVolumeShopDisplay() {
+            // TODO: 볼륨 상점 표시 업데이트
+        }
+
+        function showGemDetails(gemId) {
+            // TODO: 보석 상세 정보 표시
+        }
 
         // 이벤트 리스너들
         document.getElementById('loginBtn').addEventListener('click', login);
@@ -895,31 +971,145 @@
             document.getElementById('shopScreen').style.pointerEvents = 'none';
         });
 
-        // 기타 이벤트 리스너들...
-        
+        document.getElementById('closeGachaShopBtn').addEventListener('click', () => {
+            document.getElementById('gachaShopScreen').style.opacity = '0';
+            document.getElementById('gachaShopScreen').style.pointerEvents = 'none';
+        });
+
+        document.getElementById('closeVolumeShopBtn').addEventListener('click', () => {
+            document.getElementById('volumeShopScreen').style.opacity = '0';
+            document.getElementById('volumeShopScreen').style.pointerEvents = 'none';
+        });
+
+        // 설정 관련 이벤트 리스너들
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsScreen').style.opacity = '1';
+            document.getElementById('settingsScreen').style.pointerEvents = 'auto';
+        });
+
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsScreen').style.opacity = '0';
+            document.getElementById('settingsScreen').style.pointerEvents = 'none';
+        });
+
+        // 인벤토리 관련 이벤트 리스너들
+        document.getElementById('inventoryBtn').addEventListener('click', () => {
+            document.getElementById('inventoryScreen').style.opacity = '1';
+            document.getElementById('inventoryScreen').style.pointerEvents = 'auto';
+        });
+
+        document.getElementById('closeInventoryBtn').addEventListener('click', () => {
+            document.getElementById('inventoryScreen').style.opacity = '0';
+            document.getElementById('inventoryScreen').style.pointerEvents = 'none';
+        });
+
+        // 뽑기 결과 화면 이벤트 리스너들
+        document.getElementById('continueBtn').addEventListener('click', () => {
+            showGemReward();
+        });
+
+        document.getElementById('finalContinueBtn').addEventListener('click', () => {
+            endGacha();
+        });
+
+        function showGemReward() {
+            const revealScreen = document.getElementById('revealScreen');
+            const gemRewardScreen = document.getElementById('gemRewardScreen');
+            
+            revealScreen.style.opacity = '0';
+            revealScreen.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                if (window.currentGachaCount === 10) {
+                    showMultipleGemReward();
+                } else {
+                    showSingleGemReward();
+                }
+                
+                gemRewardScreen.style.opacity = '1';
+                gemRewardScreen.style.pointerEvents = 'auto';
+            }, 500);
+        }
+
+        function showSingleGemReward() {
+            const result = currentGachaResults[0];
+            const gem = gemData[result.gemId];
+            
+            document.getElementById('singleReward').classList.remove('hidden');
+            document.getElementById('multipleReward').classList.add('hidden');
+            
+            document.getElementById('rewardGemImage').textContent = gem.emoji;
+            document.getElementById('rewardText').textContent = `${gem.name} 획득!`;
+        }
+
+        function showMultipleGemReward() {
+            document.getElementById('singleReward').classList.add('hidden');
+            document.getElementById('multipleReward').classList.remove('hidden');
+            
+            const grid = document.getElementById('multipleGemGrid');
+            grid.innerHTML = '';
+            
+            currentGachaResults.forEach(result => {
+                const gem = gemData[result.gemId];
+                const gemDiv = document.createElement('div');
+                gemDiv.className = 'bg-white bg-opacity-10 rounded-lg p-3 text-center';
+                gemDiv.innerHTML = `
+                    <div class="text-2xl mb-1">${gem.emoji}</div>
+                    <div class="text-xs text-white">${gem.name}</div>
+                `;
+                grid.appendChild(gemDiv);
+            });
+        }
+
+        function endGacha() {
+            const gemRewardScreen = document.getElementById('gemRewardScreen');
+            const mainUI = document.getElementById('mainUI');
+            
+            gemRewardScreen.style.opacity = '0';
+            gemRewardScreen.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                mainUI.style.opacity = '1';
+                isGachaActive = false;
+                currentGachaResults = [];
+                window.currentGachaCount = 1;
+            }, 500);
+        }
+
         // 서버 상태 확인
         async function checkServerStatus() {
             try {
+                console.log('🔍 서버 상태 확인 시작');
                 const response = await fetch(API_BASE_URL);
                 const data = await response.json();
                 document.getElementById('serverStatus').innerHTML = `
                     <p class="text-green-400">✅ 서버 연결됨</p>
-                    <p class="text-xs text-gray-400">${data.message}</p>
+                    <p class="text-xs text-gray-400">${data.message || '서버가 정상 작동 중입니다'}</p>
                 `;
+                console.log('✅ 서버 상태 확인 완료');
             } catch (error) {
+                console.error('💥 서버 상태 확인 실패:', error);
                 document.getElementById('serverStatus').innerHTML = `
                     <p class="text-red-400">❌ 서버 연결 실패</p>
                     <p class="text-xs text-gray-400">백엔드 서버를 확인하세요</p>
+                    <p class="text-xs text-red-300">${error.message}</p>
                 `;
             }
         }
 
-        // 페이지 로드 시 서버 상태 확인
-        checkServerStatus();
-        
-        // 나머지 함수들은 기존 코드와 유사하게 구현하되 API 연동 추가
-        // (updateEquippedGemDisplay, updateInventoryDisplay, updateVolumeShopDisplay 등)
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 페이지 로드 완료');
+            
+            // 디버그 정보 표시
+            document.getElementById('apiUrlDisplay').textContent = API_BASE_URL;
+            
+            // 서버 상태 확인
+            checkServerStatus();
+            
+            console.log('🎮 게임 초기화 완료');
+        });
         
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'977cf346a25b30a3',t:'MTc1NjY0NzczOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'977d23b5a19d7fb4',t:'MTc1NjY0OTcyMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
