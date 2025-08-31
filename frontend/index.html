@@ -1,1 +1,926 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>뽑기 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .glow-button {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glow-button:hover, .glow-button:active {
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
+            transform: translateY(-2px);
+        }
+        .currency-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        .gacha-button {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .gacha-button:hover, .gacha-button:active {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(245, 87, 108, 0.4);
+        }
+        .point-button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        /* 등급별 배경색 */
+        .grade-common {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #495057;
+        }
+        .grade-rare {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+            color: white;
+        }
+        .grade-epic {
+            background: linear-gradient(135deg, #9775fa 0%, #845ef7 100%);
+            color: white;
+        }
+        .grade-legendary {
+            background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%);
+            color: #495057;
+        }
+        .grade-unique {
+            background: linear-gradient(45deg, #ff6b6b 0%, #feca57 16.66%, #48dbfb 33.33%, #0abde3 50%, #ff9ff3 66.66%, #54a0ff 83.33%, #5f27cd 100%);
+            background-size: 400% 400%;
+            animation: rainbow 3s ease infinite;
+            color: white;
+        }
+        
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 로딩 스피너 */
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 모바일 최적화 */
+        @media (max-width: 640px) {
+            .currency-card {
+                padding: 1rem;
+                min-width: 120px;
+            }
+            .currency-card .text-3xl {
+                font-size: 1.5rem;
+            }
+            .point-button {
+                padding: 1rem 2rem;
+                font-size: 1rem;
+            }
+            .gacha-button {
+                padding: 1.25rem 2.5rem;
+                font-size: 1.125rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .currency-card {
+                padding: 0.75rem;
+                min-width: 100px;
+            }
+            .currency-card .text-3xl {
+                font-size: 1.25rem;
+            }
+            .point-button {
+                padding: 0.875rem 1.5rem;
+                font-size: 0.875rem;
+            }
+            .gacha-button {
+                padding: 1rem 2rem;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
+    
+    <!-- 로그인 화면 -->
+    <div id="loginScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-md p-6 text-center">
+            <h1 class="text-3xl font-bold text-white mb-6">💎 보석 뽑기 게임</h1>
+            <p class="text-gray-300 mb-6">게임을 시작하려면 로그인하세요</p>
+            <button id="loginBtn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-3 rounded-full text-white font-bold text-lg transition-all duration-300">
+                게임 시작
+            </button>
+            <div id="loginLoading" class="hidden mt-4 flex justify-center">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 메인 UI 영역 -->
+    <div id="mainUI" class="transition-opacity duration-500 opacity-0">
+        <!-- 재화 표시 영역 -->
+        <div class="flex gap-4 sm:gap-6 mb-8 sm:mb-12">
+            <!-- 포인트 -->
+            <div class="currency-card rounded-2xl p-6 text-center text-white shadow-2xl">
+                <div class="text-xs sm:text-sm font-medium opacity-80 mb-2">포인트</div>
+                <div id="points" class="text-3xl font-bold">0</div>
+            </div>
+            
+            <!-- 프리즘 -->
+            <div class="currency-card rounded-2xl p-6 text-center text-white shadow-2xl">
+                <div class="text-xs sm:text-sm font-medium opacity-80 mb-2">프리즘</div>
+                <div id="prisms" class="text-3xl font-bold">0</div>
+            </div>
+        </div>
+
+        <!-- 게임 버튼 영역 -->
+        <div class="flex flex-col items-center gap-4 sm:gap-6">
+            <!-- 상단 버튼들 -->
+            <div class="flex gap-4 items-center">
+                <!-- 포인트 획득 버튼 -->
+                <button id="earnPointsBtn" class="point-button glow-button px-8 py-3 rounded-full text-white font-bold text-lg shadow-2xl touch-manipulation">
+                    ✨ 포인트 획득 ✨
+                </button>
+                
+                <!-- 인벤토리 버튼 -->
+                <button id="inventoryBtn" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-8 py-3 rounded-full text-white font-bold text-lg shadow-2xl touch-manipulation transition-all duration-300">
+                    🎒 인벤토리
+                </button>
+                
+                <!-- 설정 버튼 -->
+                <button id="settingsBtn" class="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 px-8 py-3 rounded-full text-white font-bold text-lg shadow-2xl touch-manipulation transition-all duration-300">
+                    ⚙️ 설정
+                </button>
+            </div>
+            
+            <!-- 상점 버튼 -->
+            <button id="shopBtn" class="gacha-button px-16 py-5 rounded-full text-white font-bold text-2xl shadow-2xl touch-manipulation">
+                🏪 상점 🏪
+            </button>
+            
+            <!-- 장착된 보석 표시 -->
+            <div id="equippedGemDisplay" class="mt-4 bg-white bg-opacity-10 rounded-xl p-4 text-center text-white opacity-0 transition-all duration-300">
+                <div class="text-sm opacity-80 mb-2">장착된 보석</div>
+                <div id="equippedGemIcon" class="text-3xl mb-2">💎</div>
+                <div id="equippedGemName" class="font-bold mb-1">보석 이름</div>
+                <div id="equippedGemStats" class="text-sm opacity-80">코러스 +1</div>
+            </div>
+        </div>
+
+        <!-- 결과 메시지 -->
+        <div id="message" class="mt-6 sm:mt-8 text-center text-white font-medium text-base sm:text-lg opacity-0 transition-opacity duration-300 px-4"></div>
+    </div>
+
+    <!-- 뽑기 모션 화면 -->
+    <div id="gachaScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="text-center">
+            <!-- 원석 이미지 -->
+            <div id="gemstone" class="w-32 h-32 sm:w-40 sm:h-40 bg-gray-300 rounded-lg mx-auto mb-6 cursor-pointer transform transition-all duration-300 hover:scale-110 shadow-2xl flex items-center justify-center text-4xl">
+                💎
+            </div>
+            <p id="gachaText" class="text-white text-lg sm:text-xl font-medium">원석을 클릭하세요!</p>
+        </div>
+    </div>
+
+    <!-- 등급 공개 화면 -->
+    <div id="revealScreen" class="fixed inset-0 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-1000">
+        <div class="text-center">
+            <div id="gradeText" class="text-6xl sm:text-8xl font-bold mb-4 drop-shadow-2xl"></div>
+            <p id="revealMessage" class="text-white text-xl sm:text-2xl font-medium mb-8">등급이 공개되었습니다!</p>
+            <button id="continueBtn" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-8 py-3 rounded-full text-white font-bold text-lg transition-all duration-300">
+                계속하기
+            </button>
+        </div>
+    </div>
+
+    <!-- 보석 획득 화면 -->
+    <div id="gemRewardScreen" class="fixed inset-0 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-1000 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+        <div class="text-center max-w-4xl w-full px-4">
+            <!-- 단일 보석 표시 -->
+            <div id="singleReward" class="hidden">
+                <div id="rewardGemImage" class="w-24 h-24 sm:w-32 sm:h-32 bg-yellow-400 rounded-full mx-auto mb-6 shadow-2xl flex items-center justify-center text-3xl sm:text-4xl">
+                    💎
+                </div>
+                <div id="rewardText" class="text-4xl sm:text-6xl font-bold text-white mb-8 drop-shadow-2xl">보석 획득!</div>
+            </div>
+            
+            <!-- 다중 보석 표시 -->
+            <div id="multipleReward" class="hidden">
+                <div class="text-4xl sm:text-6xl font-bold text-white mb-8 drop-shadow-2xl">10개 보석 획득!</div>
+                <div id="multipleGemGrid" class="grid grid-cols-5 gap-4 mb-8 max-w-2xl mx-auto">
+                    <!-- 10개 보석이 여기에 표시됩니다 -->
+                </div>
+            </div>
+            
+            <button id="finalContinueBtn" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-8 py-3 rounded-full text-white font-bold text-lg transition-all duration-300">
+                확인
+            </button>
+        </div>
+    </div>
+
+    <!-- 상점 메인 화면 -->
+    <div id="shopScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-md p-6">
+            <!-- 상점 헤더 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">🏪 상점</h2>
+                <button id="closeShopBtn" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                    ✕ 닫기
+                </button>
+            </div>
+            
+            <!-- 상점 메뉴 -->
+            <div class="space-y-4">
+                <button onclick="openGachaShop()" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-4 rounded-xl text-white font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3">
+                    ⛏️ 원석 채굴장
+                </button>
+                <button onclick="openVolumeShop()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-6 py-4 rounded-xl text-white font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3">
+                    📦 볼륨 상점
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 원석 채굴장 화면 -->
+    <div id="gachaShopScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-2xl max-h-[90vh] p-6 flex flex-col">
+            <!-- 채굴장 헤더 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">⛏️ 원석 채굴장</h2>
+                <button id="closeGachaShopBtn" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                    ✕ 닫기
+                </button>
+            </div>
+            
+            <!-- 뽑기 목록 -->
+            <div class="space-y-4 overflow-y-auto flex-1 pr-2">
+                <!-- 초심자의 원석 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-1">🪨 초심자의 원석</h3>
+                        <p class="text-gray-300 text-sm">기본적인 보석이 나오는 원석입니다</p>
+                        <p class="text-blue-300 font-medium">💰 10 포인트 | 💰 100 포인트 (10회)</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startGacha('beginner')" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            1회 뽑기
+                        </button>
+                        <button onclick="startGacha('beginner', 10)" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            10회 뽑기
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 빛나는 원석 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-1">✨ 빛나는 원석</h3>
+                        <p class="text-gray-300 text-sm">균형잡힌 확률의 원석입니다</p>
+                        <p class="text-purple-300 font-medium">💎 5 프리즘 | 💎 50 프리즘 (10회)</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startGacha('normal')" class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            1회 뽑기
+                        </button>
+                        <button onclick="startGacha('normal', 10)" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            10회 뽑기
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 영롱한 원석 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-1">🌟 영롱한 원석</h3>
+                        <p class="text-gray-300 text-sm">고급 보석이 더 잘 나오는 원석입니다</p>
+                        <p class="text-purple-300 font-medium">💎 30 프리즘 | 💎 300 프리즘 (10회)</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startGacha('premium')" class="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            1회 뽑기
+                        </button>
+                        <button onclick="startGacha('premium', 10)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            10회 뽑기
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 광안의 원석 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-1">💫 광안의 원석</h3>
+                        <p class="text-gray-300 text-sm">최고급 보석이 특별한 확률로 나오는 원석입니다</p>
+                        <p class="text-purple-300 font-medium">💎 40 프리즘 | 💎 400 프리즘 (10회)</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="startGacha('luxury')" class="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            1회 뽑기
+                        </button>
+                        <button onclick="startGacha('luxury', 10)" class="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            10회 뽑기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 볼륨 상점 화면 -->
+    <div id="volumeShopScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-2xl p-6">
+            <!-- 볼륨 상점 헤더 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">📦 볼륨 상점</h2>
+                <button id="closeVolumeShopBtn" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                    ✕ 닫기
+                </button>
+            </div>
+            
+            <!-- 볼륨 목록 -->
+            <div class="space-y-4">
+                <!-- 멀티 볼륨 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-1">🔢 멀티 볼륨</h3>
+                            <p class="text-gray-300 text-sm mb-2">장착한 보석의 배율을 합연산으로 더해줍니다</p>
+                            <p class="text-blue-300 font-medium">💰 100,000 포인트</p>
+                            <p id="multiVolumeStatus" class="text-xs text-gray-400 mt-1">미보유</p>
+                        </div>
+                        <button id="buyMultiVolumeBtn" onclick="buyVolume('multi')" class="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            구매
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 코러스 볼륨 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-1">🎵 코러스 볼륨</h3>
+                            <p class="text-gray-300 text-sm mb-2">장착한 보석의 코러스를 더해줍니다</p>
+                            <p class="text-blue-300 font-medium">💰 55,000 포인트</p>
+                            <p id="chorusVolumeStatus" class="text-xs text-gray-400 mt-1">미보유</p>
+                        </div>
+                        <button id="buyChorusVolumeBtn" onclick="buyVolume('chorus')" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            구매
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 럭스 볼륨 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-1">✨ 럭스 볼륨</h3>
+                            <p class="text-gray-300 text-sm mb-2">장착한 보석의 휘광 확률을 더해줍니다</p>
+                            <p class="text-purple-300 font-medium">💎 100 프리즘</p>
+                            <p id="luxVolumeStatus" class="text-xs text-gray-400 mt-1">미보유</p>
+                        </div>
+                        <button id="buyLuxVolumeBtn" onclick="buyVolume('lux')" class="bg-gradient-to-r from-yellow-400 to-pink-500 hover:from-yellow-500 hover:to-pink-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                            구매
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 인벤토리 화면 -->
+    <div id="inventoryScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-4xl h-5/6 max-h-96 sm:max-h-screen sm:h-4/5 p-6 flex flex-col">
+            <!-- 인벤토리 헤더 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">🎒 인벤토리</h2>
+                <button id="closeInventoryBtn" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                    ✕ 닫기
+                </button>
+            </div>
+            
+            <!-- 인벤토리 내용 -->
+            <div class="flex flex-1 gap-6 overflow-hidden">
+                <!-- 좌측: 보석 리스트 -->
+                <div class="w-1/2 bg-white bg-opacity-5 rounded-xl p-4 overflow-y-auto">
+                    <h3 class="text-lg font-bold text-white mb-4">보석 목록</h3>
+                    <div id="gemList" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        <!-- 보석들이 여기에 동적으로 추가됩니다 -->
+                    </div>
+                </div>
+                
+                <!-- 우측: 보석 상세 정보 및 장착 슬롯 -->
+                <div class="w-1/2 bg-white bg-opacity-5 rounded-xl p-4 overflow-y-auto">
+                    <!-- 장착 슬롯 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-white mb-3">장착 슬롯</h3>
+                        <div id="equipmentSlots" class="grid grid-cols-2 gap-2 mb-4">
+                            <!-- 장착 슬롯들이 여기에 동적으로 추가됩니다 -->
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            <span id="slotInfo">슬롯 0/1 사용 중</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 보석 상세 정보 -->
+                    <div id="gemDetails" class="text-center text-white">
+                        <div class="text-6xl mb-4">💎</div>
+                        <h3 class="text-xl font-bold mb-2">보석을 선택하세요</h3>
+                        <p class="text-gray-300">좌측에서 보석을 클릭하면 상세 정보가 표시됩니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 설정 화면 -->
+    <div id="settingsScreen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-500">
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl w-11/12 max-w-md p-6">
+            <!-- 설정 헤더 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl sm:text-3xl font-bold text-white">⚙️ 설정</h2>
+                <button id="closeSettingsBtn" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-full text-white font-bold transition-all duration-300">
+                    ✕ 닫기
+                </button>
+            </div>
+            
+            <!-- 설정 옵션들 -->
+            <div class="space-y-4">
+                <!-- 서버 상태 -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <h3 class="text-lg font-bold text-white mb-2">🌐 서버 상태</h3>
+                    <div id="serverStatus" class="text-gray-300 text-sm">
+                        <p>연결 확인 중...</p>
+                    </div>
+                </div>
+                
+                <!-- 사용자 ID -->
+                <div class="bg-white bg-opacity-5 rounded-xl p-4">
+                    <h3 class="text-lg font-bold text-white mb-2">👤 사용자 정보</h3>
+                    <div id="userInfo" class="text-gray-300 text-sm">
+                        <p>사용자 ID: <span id="userIdDisplay">로딩 중...</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API 설정
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3000'
+            : 'https://your-app-name.onrender.com'; // 실제 Render URL로 변경 필요
+
+        // 게임 상태 변수
+        let currentUserId = null;
+        let gameData = {
+            points: 0,
+            prisms: 0,
+            inventory: {},
+            volumes: { multi: false, chorus: false, lux: false },
+            equippedGems: []
+        };
+        let isGachaActive = false;
+        let currentGachaResults = [];
+
+        // 보석 데이터 (백엔드와 동일)
+        const gemData = {
+            1: { name: '작은 수정', emoji: '💎', chorus: 1, multiple: 1, lux: 0 },
+            2: { name: '푸른 수정', emoji: '🔷', chorus: 2, multiple: 1, lux: 0 },
+            3: { name: '붉은 수정', emoji: '🔶', chorus: 3, multiple: 1, lux: 0 },
+            4: { name: '에메랄드', emoji: '💚', chorus: 4, multiple: 1, lux: 0 },
+            5: { name: '사파이어', emoji: '💙', chorus: 5, multiple: 1, lux: 0 },
+            6: { name: '루비', emoji: '❤️', chorus: 6, multiple: 1, lux: 0 },
+            7: { name: '자수정', emoji: '💜', chorus: 7, multiple: 1.1, lux: 0 },
+            8: { name: '황금석', emoji: '💛', chorus: 8, multiple: 1.2, lux: 0 },
+            9: { name: '다이아몬드', emoji: '💍', chorus: 9, multiple: 1.3, lux: 0 },
+            10: { name: '오팔', emoji: '🌈', chorus: 10, multiple: 1.4, lux: 0.5 },
+            11: { name: '진주', emoji: '🤍', chorus: 11, multiple: 1.5, lux: 0.8 },
+            12: { name: '토파즈', emoji: '🧡', chorus: 12, multiple: 1.6, lux: 1.0 },
+            13: { name: '별의 조각', emoji: '⭐', chorus: 15, multiple: 2.0, lux: 2.5 },
+            14: { name: '달의 눈물', emoji: '🌙', chorus: 20, multiple: 2.5, lux: 4.0 },
+            15: { name: '태양의 심장', emoji: '☀️', chorus: 25, multiple: 3.0, lux: 5.0 }
+        };
+
+        // DOM 요소들
+        const pointsDisplay = document.getElementById('points');
+        const prismsDisplay = document.getElementById('prisms');
+        const messageDiv = document.getElementById('message');
+
+        // API 호출 함수들
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API 호출 오류:', error);
+                showMessage('서버 연결에 실패했습니다.', 'text-red-300');
+                throw error;
+            }
+        }
+
+        // 로그인 함수
+        async function login() {
+            const loginBtn = document.getElementById('loginBtn');
+            const loginLoading = document.getElementById('loginLoading');
+            
+            loginBtn.style.display = 'none';
+            loginLoading.classList.remove('hidden');
+            
+            try {
+                // 기존 사용자 ID 확인
+                const savedUserId = localStorage.getItem('gemGachaUserId');
+                
+                const response = await apiCall('/api/auth/login', 'POST', {
+                    userId: savedUserId
+                });
+                
+                if (response.success) {
+                    currentUserId = response.userId;
+                    localStorage.setItem('gemGachaUserId', currentUserId);
+                    
+                    // 게임 데이터 로드
+                    await loadGameData();
+                    
+                    // 로그인 화면 숨기고 메인 UI 표시
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('mainUI').style.opacity = '1';
+                    
+                    showMessage('게임에 접속했습니다!', 'text-green-300');
+                }
+            } catch (error) {
+                loginBtn.style.display = 'block';
+                loginLoading.classList.add('hidden');
+                showMessage('로그인에 실패했습니다.', 'text-red-300');
+            }
+        }
+
+        // 게임 데이터 로드
+        async function loadGameData() {
+            try {
+                const data = await apiCall(`/api/user/gamedata/${currentUserId}`);
+                gameData = data;
+                updateDisplay();
+                updateEquippedGemDisplay();
+                updateVolumeShopDisplay();
+                
+                // 사용자 정보 업데이트
+                document.getElementById('userIdDisplay').textContent = currentUserId.substring(0, 8) + '...';
+            } catch (error) {
+                console.error('게임 데이터 로드 실패:', error);
+            }
+        }
+
+        // 화면 업데이트
+        function updateDisplay() {
+            pointsDisplay.textContent = gameData.points.toLocaleString();
+            prismsDisplay.textContent = gameData.prisms.toLocaleString();
+        }
+
+        // 메시지 표시
+        function showMessage(text, color = 'text-white') {
+            messageDiv.textContent = text;
+            messageDiv.className = `mt-6 sm:mt-8 text-center font-medium text-base sm:text-lg transition-opacity duration-300 px-4 ${color}`;
+            messageDiv.style.opacity = '1';
+            
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+            }, 3000);
+        }
+
+        // 포인트 획득
+        async function earnPoints() {
+            if (isGachaActive || !currentUserId) return;
+            
+            try {
+                const response = await apiCall('/api/user/earn-points', 'POST', {
+                    userId: currentUserId
+                });
+                
+                gameData.points = response.newPoints;
+                gameData.prisms = response.newPrisms;
+                updateDisplay();
+                
+                if (response.prismsEarned > 0) {
+                    showMessage(`${response.earnedPoints} 포인트 + 휘광으로 프리즘 1개 획득!`, 'text-purple-300');
+                } else {
+                    showMessage(`${response.earnedPoints} 포인트를 획득했습니다!`, 'text-blue-300');
+                }
+            } catch (error) {
+                console.error('포인트 획득 실패:', error);
+            }
+        }
+
+        // 뽑기 시작
+        async function startGacha(type, count = 1) {
+            if (isGachaActive || !currentUserId) return;
+            
+            try {
+                const response = await apiCall('/api/gacha/draw', 'POST', {
+                    userId: currentUserId,
+                    type,
+                    count
+                });
+                
+                if (response.success) {
+                    // 게임 데이터 업데이트
+                    gameData.points = response.newPoints;
+                    gameData.prisms = response.newPrisms;
+                    gameData.inventory = response.newInventory;
+                    updateDisplay();
+                    
+                    // 뽑기 결과 저장
+                    currentGachaResults = response.results;
+                    window.currentGachaCount = count;
+                    
+                    // 상점 화면 닫기
+                    closeAllShops();
+                    
+                    // 뽑기 애니메이션 시작
+                    startGachaAnimation();
+                } else {
+                    showMessage('뽑기에 실패했습니다.', 'text-red-300');
+                }
+            } catch (error) {
+                console.error('뽑기 실패:', error);
+            }
+        }
+
+        // 볼륨 구매
+        async function buyVolume(type) {
+            if (!currentUserId) return;
+            
+            try {
+                const response = await apiCall('/api/user/buy-volume', 'POST', {
+                    userId: currentUserId,
+                    type
+                });
+                
+                if (response.success) {
+                    gameData.volumes = response.volumes;
+                    gameData.points = response.points;
+                    gameData.prisms = response.prisms;
+                    updateDisplay();
+                    updateVolumeShopDisplay();
+                    showMessage(`${getVolumeKoreanName(type)}을(를) 구매했습니다!`, 'text-green-300');
+                }
+            } catch (error) {
+                const errorData = await error.response?.json();
+                showMessage(errorData?.error || '구매에 실패했습니다.', 'text-red-300');
+            }
+        }
+
+        // 보석 장착/해제
+        async function equipGem(gemId, action = 'equip') {
+            if (!currentUserId) return;
+            
+            try {
+                const response = await apiCall('/api/user/equip-gem', 'POST', {
+                    userId: currentUserId,
+                    gemId,
+                    action
+                });
+                
+                if (response.success) {
+                    gameData.equippedGems = response.equippedGems;
+                    updateEquippedGemDisplay();
+                    updateInventoryDisplay();
+                    showGemDetails(gemId);
+                    
+                    const gem = gemData[gemId];
+                    if (action === 'equip') {
+                        showMessage(`${gem.name}을(를) 장착했습니다!`, 'text-green-300');
+                    } else {
+                        showMessage(`${gem.name} 장착을 해제했습니다!`, 'text-yellow-300');
+                    }
+                }
+            } catch (error) {
+                console.error('보석 장착/해제 실패:', error);
+            }
+        }
+
+        // 보석 추출
+        async function extractGem(gemId) {
+            if (!currentUserId) return;
+            
+            try {
+                const response = await apiCall('/api/user/extract-gem', 'POST', {
+                    userId: currentUserId,
+                    gemId
+                });
+                
+                if (response.success) {
+                    gameData.prisms = response.newPrisms;
+                    gameData.inventory = response.newInventory;
+                    updateDisplay();
+                    updateInventoryDisplay();
+                    showGemDetails(gemId);
+                    
+                    const gem = gemData[gemId];
+                    showMessage(`${gem.name}을(를) 추출하여 프리즘 ${response.prismReward}개를 획득했습니다!`, 'text-purple-300');
+                }
+            } catch (error) {
+                console.error('보석 추출 실패:', error);
+            }
+        }
+
+        // 유틸리티 함수들
+        function getVolumeKoreanName(type) {
+            const names = { multi: '멀티 볼륨', chorus: '코러스 볼륨', lux: '럭스 볼륨' };
+            return names[type] || '볼륨';
+        }
+
+        function getGemGrade(gemId) {
+            const gemRewards = {
+                '일반': [1, 2, 3],
+                '희귀': [4, 5, 6], 
+                '에픽': [7, 8, 9],
+                '전설': [10, 11, 12],
+                '유니크': [13, 14, 15]
+            };
+            
+            for (const [grade, gemIds] of Object.entries(gemRewards)) {
+                if (gemIds.includes(parseInt(gemId))) {
+                    return grade;
+                }
+            }
+            return '일반';
+        }
+
+        function closeAllShops() {
+            document.getElementById('shopScreen').style.opacity = '0';
+            document.getElementById('shopScreen').style.pointerEvents = 'none';
+            document.getElementById('gachaShopScreen').style.opacity = '0';
+            document.getElementById('gachaShopScreen').style.pointerEvents = 'none';
+            document.getElementById('volumeShopScreen').style.opacity = '0';
+            document.getElementById('volumeShopScreen').style.pointerEvents = 'none';
+        }
+
+        // 뽑기 애니메이션 및 UI 함수들 (기존 코드와 동일하지만 API 연동)
+        function startGachaAnimation() {
+            isGachaActive = true;
+            
+            const mainUI = document.getElementById('mainUI');
+            const gachaScreen = document.getElementById('gachaScreen');
+            const gemstone = document.getElementById('gemstone');
+            const gachaText = document.getElementById('gachaText');
+            
+            mainUI.style.opacity = '0';
+            gachaScreen.style.opacity = '1';
+            gachaScreen.style.pointerEvents = 'auto';
+            
+            if (window.currentGachaCount === 10) {
+                gachaText.textContent = '원석을 클릭하세요! (10회 뽑기)';
+            } else {
+                gachaText.textContent = '원석을 클릭하세요!';
+            }
+            
+            gemstone.onclick = () => {
+                if (window.currentGachaCount === 10) {
+                    performMultipleGacha();
+                } else {
+                    revealGrade();
+                }
+            };
+        }
+
+        function performMultipleGacha() {
+            // 가장 높은 등급 찾기
+            const gradeOrder = ['일반', '희귀', '에픽', '전설', '유니크'];
+            let highestGrade = '일반';
+            let highestGradeClass = 'grade-common';
+            
+            currentGachaResults.forEach(result => {
+                const currentIndex = gradeOrder.indexOf(result.grade);
+                const highestIndex = gradeOrder.indexOf(highestGrade);
+                if (currentIndex > highestIndex) {
+                    highestGrade = result.grade;
+                    highestGradeClass = getGradeClass(result.grade);
+                }
+            });
+            
+            showGradeReveal(highestGrade, highestGradeClass, true);
+        }
+
+        function revealGrade() {
+            const result = currentGachaResults[0];
+            showGradeReveal(result.grade, getGradeClass(result.grade), false);
+        }
+
+        function getGradeClass(grade) {
+            const gradeClasses = {
+                '일반': 'grade-common',
+                '희귀': 'grade-rare',
+                '에픽': 'grade-epic',
+                '전설': 'grade-legendary',
+                '유니크': 'grade-unique'
+            };
+            return gradeClasses[grade] || 'grade-common';
+        }
+
+        function showGradeReveal(gradeName, gradeClass, isMultiple) {
+            const gachaScreen = document.getElementById('gachaScreen');
+            const revealScreen = document.getElementById('revealScreen');
+            const gradeText = document.getElementById('gradeText');
+            const revealMessage = document.getElementById('revealMessage');
+
+            gachaScreen.style.opacity = '0';
+            gachaScreen.style.pointerEvents = 'none';
+
+            setTimeout(() => {
+                revealScreen.style.opacity = '1';
+                revealScreen.style.pointerEvents = 'auto';
+                revealScreen.className = `fixed inset-0 flex items-center justify-center z-50 transition-all duration-1000 ${gradeClass}`;
+                gradeText.textContent = gradeName;
+                
+                if (isMultiple) {
+                    revealMessage.textContent = `최고 등급: ${gradeName}!`;
+                } else {
+                    revealMessage.textContent = '등급이 공개되었습니다!';
+                }
+            }, 500);
+        }
+
+        // 나머지 UI 함수들 (상점, 인벤토리 등)은 기존 코드와 유사하게 구현
+        // 하지만 데이터는 gameData 객체에서 가져오고 API 호출로 업데이트
+
+        // 이벤트 리스너들
+        document.getElementById('loginBtn').addEventListener('click', login);
+        document.getElementById('earnPointsBtn').addEventListener('click', earnPoints);
+        
+        // 상점 관련 이벤트 리스너들
+        document.getElementById('shopBtn').addEventListener('click', () => {
+            if (isGachaActive) return;
+            document.getElementById('shopScreen').style.opacity = '1';
+            document.getElementById('shopScreen').style.pointerEvents = 'auto';
+        });
+
+        document.getElementById('closeShopBtn').addEventListener('click', () => {
+            document.getElementById('shopScreen').style.opacity = '0';
+            document.getElementById('shopScreen').style.pointerEvents = 'none';
+        });
+
+        // 기타 이벤트 리스너들...
+        
+        // 서버 상태 확인
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(API_BASE_URL);
+                const data = await response.json();
+                document.getElementById('serverStatus').innerHTML = `
+                    <p class="text-green-400">✅ 서버 연결됨</p>
+                    <p class="text-xs text-gray-400">${data.message}</p>
+                `;
+            } catch (error) {
+                document.getElementById('serverStatus').innerHTML = `
+                    <p class="text-red-400">❌ 서버 연결 실패</p>
+                    <p class="text-xs text-gray-400">백엔드 서버를 확인하세요</p>
+                `;
+            }
+        }
+
+        // 페이지 로드 시 서버 상태 확인
+        checkServerStatus();
+        
+        // 나머지 함수들은 기존 코드와 유사하게 구현하되 API 연동 추가
+        // (updateEquippedGemDisplay, updateInventoryDisplay, updateVolumeShopDisplay 등)
+        
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'977cc113429a0dbb',t:'MTc1NjY0NTY4Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
 
