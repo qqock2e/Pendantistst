@@ -495,8 +495,8 @@
     </div>
 
     <script>
-        // API 설정 - 실제 Render URL로 고정
-        const API_BASE_URL = 'https://pendantistst-backend.onrender.com';
+        // API 설정 - 로컬 개발용으로 변경 (CORS 문제 해결)
+        const API_BASE_URL = 'http://localhost:3000';
 
         // 게임 상태 변수
         let currentUserId = null;
@@ -629,7 +629,20 @@
                 loginBtn.style.display = 'block';
                 loginLoading.classList.add('hidden');
                 loginError.classList.remove('hidden');
-                loginError.textContent = `로그인 실패: ${error.message}`;
+                
+                // 더 구체적인 오류 메시지
+                let errorText = '';
+                if (error.message.includes('Failed to fetch')) {
+                    errorText = '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인하세요.';
+                } else if (error.message.includes('CORS')) {
+                    errorText = 'CORS 오류: 백엔드 서버의 CORS 설정을 확인하세요.';
+                } else if (error.message.includes('404')) {
+                    errorText = 'API 엔드포인트를 찾을 수 없습니다. 백엔드 라우터를 확인하세요.';
+                } else {
+                    errorText = `로그인 실패: ${error.message}`;
+                }
+                
+                loginError.textContent = errorText;
                 showMessage('❌ 로그인에 실패했습니다.', 'text-red-300');
             }
         }
@@ -1080,19 +1093,49 @@
         async function checkServerStatus() {
             try {
                 console.log('🔍 서버 상태 확인 시작');
-                const response = await fetch(API_BASE_URL);
-                const data = await response.json();
-                document.getElementById('serverStatus').innerHTML = `
-                    <p class="text-green-400">✅ 서버 연결됨</p>
-                    <p class="text-xs text-gray-400">${data.message || '서버가 정상 작동 중입니다'}</p>
-                `;
-                console.log('✅ 서버 상태 확인 완료');
+                
+                // 먼저 간단한 ping 테스트
+                const response = await fetch(`${API_BASE_URL}/api/ping`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('serverStatus').innerHTML = `
+                        <p class="text-green-400">✅ 서버 연결됨</p>
+                        <p class="text-xs text-gray-400">${data.message || '서버가 정상 작동 중입니다'}</p>
+                        <p class="text-xs text-blue-300">응답 시간: ${Date.now() - window.pingStartTime}ms</p>
+                    `;
+                    console.log('✅ 서버 상태 확인 완료');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
             } catch (error) {
                 console.error('💥 서버 상태 확인 실패:', error);
+                
+                let errorMessage = '';
+                if (error.message.includes('CORS')) {
+                    errorMessage = 'CORS 정책으로 인한 차단 - 백엔드 서버 설정 확인 필요';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = '서버에 연결할 수 없음 - 백엔드 서버가 실행 중인지 확인';
+                } else {
+                    errorMessage = error.message;
+                }
+                
                 document.getElementById('serverStatus').innerHTML = `
                     <p class="text-red-400">❌ 서버 연결 실패</p>
                     <p class="text-xs text-gray-400">백엔드 서버를 확인하세요</p>
-                    <p class="text-xs text-red-300">${error.message}</p>
+                    <p class="text-xs text-red-300">${errorMessage}</p>
+                    <div class="mt-2 text-xs text-yellow-300">
+                        <p>💡 해결 방법:</p>
+                        <p>1. 백엔드 서버가 실행 중인지 확인</p>
+                        <p>2. CORS 설정이 올바른지 확인</p>
+                        <p>3. API URL이 정확한지 확인</p>
+                    </div>
                 `;
             }
         }
@@ -1104,12 +1147,13 @@
             // 디버그 정보 표시
             document.getElementById('apiUrlDisplay').textContent = API_BASE_URL;
             
-            // 서버 상태 확인
+            // 서버 상태 확인 (타이밍 측정)
+            window.pingStartTime = Date.now();
             checkServerStatus();
             
             console.log('🎮 게임 초기화 완료');
         });
         
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'977d23b5a19d7fb4',t:'MTc1NjY0OTcyMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'977d3148b67b3274',t:'MTc1NjY1MDI3OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
